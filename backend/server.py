@@ -174,6 +174,35 @@ class ConfigIn(BaseModel):
     map_embed: Optional[str] = None
 
 
+class OrderItemIn(BaseModel):
+    product_id: Optional[str] = None
+    name: str
+    qty: int
+    unit_price: float
+
+
+class OrderIn(BaseModel):
+    customer_name: str
+    notes: Optional[str] = ""
+    items: List[OrderItemIn]
+    subtotal: float
+    discount: float = 0
+    total: float
+    coupon_code: Optional[str] = None
+
+
+class CouponIn(BaseModel):
+    code: str
+    percent_off: float
+    active: bool = True
+    expires_at: Optional[str] = None
+    max_uses: Optional[int] = None
+
+
+class CouponValidateIn(BaseModel):
+    code: str
+
+
 def strip_id(doc):
     if not doc:
         return doc
@@ -380,6 +409,134 @@ async def update_config(body: ConfigIn, _=Depends(get_current_admin)):
 
 
 # =========================
+# ORDERS
+# =========================
+@api.post("/orders")
+async def create_order(body: OrderIn):
+    doc = body.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    if body.coupon_code:
+        code = body.coupon_code.strip().upper()
+        doc["coupon_code"] = code
+        await db.coupons.update_one({"code": code}, {"$inc": {"uses": 1}})
+    await db.orders.insert_one(doc)
+    return strip_id(doc)
+
+
+@api.get("/orders")
+async def list_orders(scope: str = "all", _=Depends(get_current_admin)):
+    q = {}
+    if scope == "today":
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        q["created_at"] = {"$gte": today_start}
+    items = await db.orders.find(q).sort([("created_at", -1)]).to_list(500)
+    return [strip_id(i) for i in items]
+
+
+@api.delete("/orders/{oid}")
+async def delete_order(oid: str, _=Depends(get_current_admin)):
+    result = await db.orders.delete_one({"id": oid})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Pedido não encontrado")
+    return {"ok": True}
+
+
+@api.get("/orders/stats")
+async def orders_stats(_=Depends(get_current_admin)):
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    all_orders = await db.orders.find({}).to_list(2000)
+    today = [o for o in all_orders if o.get("created_at", "") >= today_start]
+    counter = {}
+    for o in all_orders:
+        for it in o.get("items", []):
+            key = it.get("product_id") or it.get("name")
+            if not key:
+                continue
+            entry = counter.setdefault(key, {"name": it.get("name", ""), "qty": 0, "revenue": 0.0})
+            entry["qty"] += int(it.get("qty", 0))
+            entry["revenue"] += float(it.get("qty", 0)) * float(it.get("unit_price", 0))
+    top = sorted(counter.values(), key=lambda x: x["qty"], reverse=True)[:5]
+    recent = sorted(all_orders, key=lambda x: x.get("created_at", ""), reverse=True)[:5]
+    for r in recent:
+        r.pop("_id", None)
+    return {
+        "orders_today": len(today),
+        "revenue_today": sum(float(o.get("total", 0)) for o in today),
+        "orders_total": len(all_orders),
+        "revenue_total": sum(float(o.get("total", 0)) for o in all_orders),
+        "top_products": top,
+        "recent_orders": recent,
+    }
+
+
+# =========================
+# COUPONS
+# =========================
+@api.get("/coupons")
+async def list_coupons(_=Depends(get_current_admin)):
+    items = await db.coupons.find({}).sort([("created_at", -1)]).to_list(500)
+    return [strip_id(i) for i in items]
+
+
+@api.post("/coupons")
+async def create_coupon(body: CouponIn, _=Depends(get_current_admin)):
+    doc = body.model_dump()
+    doc["code"] = doc["code"].strip().upper()
+    if not doc["code"]:
+        raise HTTPException(400, "Código é obrigatório")
+    if doc["percent_off"] <= 0 or doc["percent_off"] > 100:
+        raise HTTPException(400, "Desconto deve ser entre 1 e 100%")
+    if await db.coupons.find_one({"code": doc["code"]}):
+        raise HTTPException(400, "Já existe um cupom com esse código")
+    doc["id"] = str(uuid.uuid4())
+    doc["uses"] = 0
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    await db.coupons.insert_one(doc)
+    return strip_id(doc)
+
+
+@api.put("/coupons/{cid}")
+async def update_coupon(cid: str, body: CouponIn, _=Depends(get_current_admin)):
+    doc = body.model_dump()
+    doc["code"] = doc["code"].strip().upper()
+    if doc["percent_off"] <= 0 or doc["percent_off"] > 100:
+        raise HTTPException(400, "Desconto deve ser entre 1 e 100%")
+    dup = await db.coupons.find_one({"code": doc["code"], "id": {"$ne": cid}})
+    if dup:
+        raise HTTPException(400, "Já existe outro cupom com esse código")
+    result = await db.coupons.update_one({"id": cid}, {"$set": doc})
+    if result.matched_count == 0:
+        raise HTTPException(404, "Cupom não encontrado")
+    updated = await db.coupons.find_one({"id": cid})
+    return strip_id(updated)
+
+
+@api.delete("/coupons/{cid}")
+async def delete_coupon(cid: str, _=Depends(get_current_admin)):
+    result = await db.coupons.delete_one({"id": cid})
+    if result.deleted_count == 0:
+        raise HTTPException(404, "Cupom não encontrado")
+    return {"ok": True}
+
+
+@api.post("/coupons/validate")
+async def validate_coupon(body: CouponValidateIn):
+    code = (body.code or "").strip().upper()
+    if not code:
+        raise HTTPException(400, "Informe o código do cupom")
+    c = await db.coupons.find_one({"code": code, "active": True})
+    if not c:
+        raise HTTPException(404, "Cupom inválido")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if c.get("expires_at") and c["expires_at"] < now_iso:
+        raise HTTPException(400, "Cupom expirado")
+    if c.get("max_uses") and c.get("uses", 0) >= c["max_uses"]:
+        raise HTTPException(400, "Cupom esgotado")
+    return {"code": c["code"], "percent_off": c["percent_off"]}
+
+
+# =========================
 # UPLOAD
 # =========================
 MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif", "webp": "image/webp"}
@@ -424,6 +581,9 @@ async def on_startup():
     await db.products.create_index("id", unique=True)
     await db.categories.create_index("id", unique=True)
     await db.promotions.create_index("id", unique=True)
+    await db.orders.create_index("id", unique=True)
+    await db.orders.create_index("created_at")
+    await db.coupons.create_index("code", unique=True)
 
     # Seed admin
     existing = await db.users.find_one({"email": ADMIN_EMAIL.lower()})

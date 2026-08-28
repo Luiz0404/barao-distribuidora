@@ -10,9 +10,18 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { Crown, LogOut, Plus, Pencil, Trash2, Upload, Tag, Package, Flame, Settings, ImageOff, ExternalLink } from "lucide-react";
+import ConfirmDialog from "@/components/ConfirmDialog";
+import {
+  Crown, LogOut, Plus, Pencil, Trash2, Upload, Tag, Package, Flame, ImageOff,
+  ExternalLink, DollarSign, ShoppingBag, TrendingUp, Ticket, Calendar, MessageCircle,
+} from "lucide-react";
 
 function money(v) { return `R$ ${Number(v || 0).toFixed(2).replace(".", ",")}`; }
+function fmtDate(iso) {
+  if (!iso) return "";
+  try { return new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); }
+  catch { return iso; }
+}
 
 function useUpload() {
   const [uploading, setUploading] = useState(false);
@@ -38,8 +47,7 @@ function ImagePicker({ value, onChange, testid }) {
       </div>
       <div className="flex flex-col gap-2">
         <input ref={inputRef} type="file" accept="image/*" hidden onChange={async (e) => {
-          const f = e.target.files?.[0];
-          if (!f) return;
+          const f = e.target.files?.[0]; if (!f) return;
           try { const url = await upload(f); onChange(url); toast.success("Imagem enviada"); }
           catch { toast.error("Falha no upload"); }
         }} data-testid={`${testid}-file`} />
@@ -52,15 +60,85 @@ function ImagePicker({ value, onChange, testid }) {
   );
 }
 
+/* ============ DASHBOARD OVERVIEW ============ */
+function DashboardOverview({ categories, products, promotions }) {
+  const [stats, setStats] = useState({ orders_today: 0, revenue_today: 0, orders_total: 0, revenue_total: 0, top_products: [], recent_orders: [] });
+  useEffect(() => { api.get("/orders/stats").then(r => setStats(r.data)).catch(() => {}); }, []);
+
+  const cards = [
+    { label: "Vendas hoje", value: money(stats.revenue_today), icon: DollarSign, color: "gold-text", testid: "stat-revenue-today" },
+    { label: "Pedidos hoje", value: stats.orders_today, icon: ShoppingBag, color: "gold-text", testid: "stat-orders-today" },
+    { label: "Total de vendas", value: money(stats.revenue_total), icon: TrendingUp, color: "text-white", testid: "stat-revenue-total" },
+    { label: "Total de pedidos", value: stats.orders_total, icon: ShoppingBag, color: "text-white", testid: "stat-orders-total" },
+    { label: "Produtos ativos", value: products.filter(p => p.active).length, icon: Package, color: "text-white", testid: "stat-products-active" },
+    { label: "Promoções ativas", value: promotions.filter(p => p.active).length, icon: Flame, color: "text-white", testid: "stat-promos-active" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+        {cards.map((s) => (
+          <div key={s.label} className="surface-card p-4" data-testid={s.testid}>
+            <div className="flex items-center gap-2 text-white/50 text-[11px] uppercase tracking-widest">
+              <s.icon className="w-3.5 h-3.5 text-[var(--gold-bright)]" /> {s.label}
+            </div>
+            <div className={`mt-2 text-2xl sm:text-3xl font-display font-black ${s.color}`}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        <div className="surface-card p-5" data-testid="top-products-card">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp className="w-4 h-4 text-[var(--gold-bright)]" />
+            <div className="font-display font-bold text-lg">Top produtos vendidos</div>
+          </div>
+          {stats.top_products?.length ? (
+            <ul className="space-y-2.5">
+              {stats.top_products.map((p, i) => (
+                <li key={i} className="flex items-center gap-3 py-2 border-b border-white/5 last:border-0">
+                  <div className="h-8 w-8 rounded-full bg-[var(--gold)]/10 border border-[var(--gold)]/30 grid place-items-center text-xs font-bold gold-text">{i + 1}</div>
+                  <div className="flex-1 min-w-0"><div className="font-semibold truncate">{p.name}</div><div className="text-xs text-white/50">{p.qty} unid. vendidas</div></div>
+                  <div className="gold-text font-bold">{money(p.revenue)}</div>
+                </li>
+              ))}
+            </ul>
+          ) : <div className="text-white/50 text-sm py-4">Nenhuma venda registrada ainda.</div>}
+        </div>
+
+        <div className="surface-card p-5" data-testid="recent-orders-card">
+          <div className="flex items-center gap-2 mb-4">
+            <ShoppingBag className="w-4 h-4 text-[var(--gold-bright)]" />
+            <div className="font-display font-bold text-lg">Últimos pedidos</div>
+          </div>
+          {stats.recent_orders?.length ? (
+            <ul className="space-y-3">
+              {stats.recent_orders.map((o) => (
+                <li key={o.id} className="flex items-center gap-3 pb-3 border-b border-white/5 last:border-0">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-semibold truncate">{o.customer_name}</div>
+                    <div className="text-xs text-white/50">{o.items?.length || 0} itens · {fmtDate(o.created_at)}</div>
+                  </div>
+                  <div className="gold-text font-bold">{money(o.total)}</div>
+                </li>
+              ))}
+            </ul>
+          ) : <div className="text-white/50 text-sm py-4">Nenhum pedido registrado ainda.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ============ PRODUCTS ============ */
-function ProductsManager({ categories }) {
+function ProductsManager({ categories, onChange }) {
   const [items, setItems] = useState([]);
   const [editing, setEditing] = useState(null);
   const [loading, setLoading] = useState(true);
   const empty = { name: "", description: "", category_slug: categories[0]?.slug || "", price: 0, promo_price: null, image_url: null, active: true };
   const [form, setForm] = useState(empty);
 
-  const load = async () => { setLoading(true); const r = await api.get("/products?all=true"); setItems(r.data); setLoading(false); };
+  const load = async () => { setLoading(true); const r = await api.get("/products?all=true"); setItems(r.data); onChange?.(r.data); setLoading(false); };
   useEffect(() => { load(); }, []);
 
   const save = async () => {
@@ -71,10 +149,10 @@ function ProductsManager({ categories }) {
       toast.success("Produto salvo");
       setEditing(null); setForm({ ...empty, category_slug: categories[0]?.slug || "" });
       load();
-    } catch (e) { toast.error("Erro ao salvar"); }
+    } catch { toast.error("Erro ao salvar"); }
   };
   const edit = (p) => { setEditing(p); setForm({ ...p, promo_price: p.promo_price || "" }); window.scrollTo({ top: 0, behavior: "smooth" }); };
-  const del = async (id) => { if (!window.confirm("Excluir produto?")) return; await api.delete(`/products/${id}`); toast.success("Excluído"); load(); };
+  const del = async (id) => { try { await api.delete(`/products/${id}`); toast.success("Excluído"); load(); } catch { toast.error("Erro ao excluir"); } };
   const toggle = async (p) => { await api.put(`/products/${p.id}`, { ...p, active: !p.active }); load(); };
 
   return (
@@ -115,7 +193,15 @@ function ProductsManager({ categories }) {
                 </div>
                 <Switch checked={p.active} onCheckedChange={() => toggle(p)} data-testid={`prod-toggle-${p.id}`} />
                 <button onClick={() => edit(p)} className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-white/30" data-testid={`prod-edit-${p.id}`}><Pencil className="w-4 h-4" /></button>
-                <button onClick={() => del(p.id)} className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`prod-del-${p.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+                <ConfirmDialog
+                  title="Excluir produto?"
+                  description={`Tem certeza que deseja excluir "${p.name}"? Todas as promoções vinculadas serão removidas.`}
+                  confirmLabel="Excluir"
+                  testid={`prod-del-${p.id}`}
+                  onConfirm={() => del(p.id)}
+                >
+                  <button className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`prod-del-${p.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+                </ConfirmDialog>
               </div>
             ))}
             {!items.length && <div className="py-10 text-center text-white/50">Nenhum produto ainda.</div>}
@@ -144,7 +230,7 @@ function CategoriesManager({ onChange }) {
       toast.success("Categoria salva"); setEditing(null); setForm(empty); load();
     } catch { toast.error("Erro ao salvar"); }
   };
-  const del = async (id) => { if (!window.confirm("Excluir categoria?")) return; await api.delete(`/categories/${id}`); load(); };
+  const del = async (id) => { try { await api.delete(`/categories/${id}`); toast.success("Excluída"); load(); } catch { toast.error("Erro ao excluir"); } };
 
   return (
     <div className="space-y-6">
@@ -171,7 +257,15 @@ function CategoriesManager({ onChange }) {
               <div className="w-11 h-11 rounded-lg bg-black/40 overflow-hidden">{c.image_url && <img src={fileUrl(c.image_url)} className="w-full h-full object-cover" alt="" />}</div>
               <div className="flex-1"><div className="font-semibold">{c.name}</div><div className="text-xs text-white/50">/{c.slug} {!c.active && <span className="text-red-400">· inativa</span>}</div></div>
               <button onClick={() => { setEditing(c); setForm(c); }} className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-white/30" data-testid={`cat-edit-${c.id}`}><Pencil className="w-4 h-4" /></button>
-              <button onClick={() => del(c.id)} className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`cat-del-${c.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+              <ConfirmDialog
+                title="Excluir categoria?"
+                description={`Deseja excluir "${c.name}"? Produtos vinculados podem ficar sem categoria válida.`}
+                confirmLabel="Excluir"
+                testid={`cat-del-${c.id}`}
+                onConfirm={() => del(c.id)}
+              >
+                <button className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`cat-del-${c.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+              </ConfirmDialog>
             </div>
           ))}
         </div>
@@ -204,9 +298,11 @@ function PromotionsManager({ products }) {
       if (editing) await api.put(`/promotions/${editing.id}`, body);
       else await api.post("/promotions", body);
       toast.success("Promoção salva"); setEditing(null); setForm({ ...empty, product_id: products[0]?.id || "" }); load();
-    } catch { toast.error("Erro ao salvar"); }
+    } catch (err) {
+      const d = err?.response?.data?.detail; toast.error(typeof d === "string" ? d : "Erro ao salvar");
+    }
   };
-  const del = async (id) => { if (!window.confirm("Excluir promoção?")) return; await api.delete(`/promotions/${id}`); load(); };
+  const del = async (id) => { try { await api.delete(`/promotions/${id}`); toast.success("Excluída"); load(); } catch { toast.error("Erro"); } };
 
   return (
     <div className="space-y-6">
@@ -239,10 +335,190 @@ function PromotionsManager({ products }) {
             <div key={p.id} className="py-3 flex items-center gap-3">
               <div className="flex-1"><div className="font-semibold">{p.product?.name || "—"}</div><div className="text-xs text-white/50">Por {money(p.promo_price)} {!p.active && <span className="text-red-400">· inativa</span>}</div></div>
               <button onClick={() => { setEditing(p); setForm({ ...p, starts_at: p.starts_at || "", ends_at: p.ends_at || "" }); }} className="h-9 w-9 grid place-items-center rounded-full border border-white/10" data-testid={`promo-edit-${p.id}`}><Pencil className="w-4 h-4" /></button>
-              <button onClick={() => del(p.id)} className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`promo-del-${p.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+              <ConfirmDialog
+                title="Excluir promoção?"
+                description="Esta promoção deixará de aparecer na página inicial."
+                confirmLabel="Excluir"
+                testid={`promo-del-${p.id}`}
+                onConfirm={() => del(p.id)}
+              >
+                <button className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`promo-del-${p.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+              </ConfirmDialog>
             </div>
           ))}
           {!items.length && <div className="py-8 text-center text-white/50">Nenhuma promoção cadastrada.</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============ ORDERS ============ */
+function OrdersManager() {
+  const [scope, setScope] = useState("all");
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  const load = async () => { setLoading(true); const r = await api.get(`/orders?scope=${scope}`); setItems(r.data); setLoading(false); };
+  useEffect(() => { load(); }, [scope]);
+
+  const del = async (id) => { try { await api.delete(`/orders/${id}`); toast.success("Pedido removido"); load(); } catch { toast.error("Erro"); } };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2">
+        <div className="surface-card inline-flex p-1 rounded-full">
+          <button onClick={() => setScope("all")} className={`px-4 py-1.5 text-sm rounded-full ${scope === "all" ? "bg-[var(--gold)] text-black font-bold" : "text-white/70"}`} data-testid="orders-filter-all">Todos</button>
+          <button onClick={() => setScope("today")} className={`px-4 py-1.5 text-sm rounded-full ${scope === "today" ? "bg-[var(--gold)] text-black font-bold" : "text-white/70"}`} data-testid="orders-filter-today">Hoje</button>
+        </div>
+        <div className="text-xs text-white/50 ml-auto">{items.length} pedido{items.length === 1 ? "" : "s"}</div>
+      </div>
+
+      <div className="surface-card divide-y divide-white/5" data-testid="orders-list">
+        {loading && <div className="p-6 text-white/50 text-sm">Carregando...</div>}
+        {!loading && !items.length && <div className="p-10 text-center text-white/50">Nenhum pedido {scope === "today" ? "hoje" : "registrado"}.</div>}
+        {items.map((o) => {
+          const isOpen = expanded === o.id;
+          return (
+            <div key={o.id} className="p-4" data-testid={`order-row-${o.id}`}>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-[var(--gold)]/10 border border-[var(--gold)]/30 grid place-items-center flex-shrink-0">
+                  <ShoppingBag className="w-4 h-4 text-[var(--gold-bright)]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold truncate">{o.customer_name}</div>
+                  <div className="text-xs text-white/50 flex items-center gap-2 flex-wrap">
+                    <span className="inline-flex items-center gap-1"><Calendar className="w-3 h-3" /> {fmtDate(o.created_at)}</span>
+                    <span>·</span>
+                    <span>{o.items?.length || 0} itens</span>
+                    {o.coupon_code && <><span>·</span><span className="inline-flex items-center gap-1 text-[var(--gold-bright)]"><Ticket className="w-3 h-3" /> {o.coupon_code}</span></>}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="gold-text font-bold">{money(o.total)}</div>
+                  {o.discount > 0 && <div className="text-[10px] text-[var(--ember)]">-{money(o.discount)}</div>}
+                </div>
+                <button onClick={() => setExpanded(isOpen ? null : o.id)} className="text-xs text-white/60 hover:text-white px-3 py-1 rounded-full border border-white/10" data-testid={`order-toggle-${o.id}`}>
+                  {isOpen ? "Ocultar" : "Detalhes"}
+                </button>
+                <ConfirmDialog
+                  title="Excluir pedido?"
+                  description="Este pedido será removido do histórico."
+                  confirmLabel="Excluir"
+                  testid={`order-del-${o.id}`}
+                  onConfirm={() => del(o.id)}
+                >
+                  <button className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`order-del-${o.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+                </ConfirmDialog>
+              </div>
+              {isOpen && (
+                <div className="mt-3 pl-13 pl-[52px] pr-2">
+                  <div className="rounded-xl bg-black/40 border border-white/5 p-3 text-sm">
+                    <ul className="divide-y divide-white/5">
+                      {(o.items || []).map((it, i) => (
+                        <li key={i} className="py-1.5 flex justify-between">
+                          <span className="text-white/85">{it.qty}× {it.name}</span>
+                          <span className="gold-text">{money(it.qty * it.unit_price)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    {o.notes && <div className="mt-2 pt-2 border-t border-white/5 text-white/60"><span className="text-white/40">Obs:</span> {o.notes}</div>}
+                    <div className="mt-2 pt-2 border-t border-white/5 flex justify-between text-xs">
+                      <span className="text-white/50">Subtotal: {money(o.subtotal)}{o.discount > 0 ? ` · Desconto: -${money(o.discount)}` : ""}</span>
+                      <span className="font-bold gold-text">Total {money(o.total)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ============ COUPONS ============ */
+function CouponsManager() {
+  const [items, setItems] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const empty = { code: "", percent_off: 10, active: true, expires_at: "", max_uses: null };
+  const [form, setForm] = useState(empty);
+
+  const load = async () => { const r = await api.get("/coupons"); setItems(r.data); };
+  useEffect(() => { load(); }, []);
+
+  const save = async () => {
+    const body = {
+      code: (form.code || "").trim().toUpperCase(),
+      percent_off: Number(form.percent_off),
+      active: form.active,
+      expires_at: form.expires_at ? new Date(form.expires_at).toISOString() : null,
+      max_uses: form.max_uses ? Number(form.max_uses) : null,
+    };
+    try {
+      if (editing) await api.put(`/coupons/${editing.id}`, body);
+      else await api.post("/coupons", body);
+      toast.success("Cupom salvo"); setEditing(null); setForm(empty); load();
+    } catch (err) {
+      const d = err?.response?.data?.detail; toast.error(typeof d === "string" ? d : "Erro ao salvar");
+    }
+  };
+  const del = async (id) => { try { await api.delete(`/coupons/${id}`); toast.success("Excluído"); load(); } catch { toast.error("Erro"); } };
+
+  return (
+    <div className="space-y-6">
+      <div className="surface-card p-5">
+        <div className="font-display font-bold text-lg mb-4 flex items-center gap-2">
+          <Ticket className="w-5 h-5 text-[var(--gold-bright)]" /> {editing ? "Editar cupom" : "Novo Cupom do Rolê"}
+        </div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <Label>Código</Label>
+            <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} placeholder="Ex.: BARAO10" className="bg-black/40 border-white/10 mt-1.5 uppercase tracking-widest" data-testid="coupon-code" />
+          </div>
+          <div><Label>Desconto (%)</Label><Input type="number" min="1" max="100" value={form.percent_off} onChange={(e) => setForm({ ...form, percent_off: e.target.value })} className="bg-black/40 border-white/10 mt-1.5" data-testid="coupon-percent" /></div>
+          <div><Label>Expira em (opcional)</Label><Input type="datetime-local" value={form.expires_at?.slice?.(0,16) || ""} onChange={(e) => setForm({ ...form, expires_at: e.target.value })} className="bg-black/40 border-white/10 mt-1.5" data-testid="coupon-expires" /></div>
+          <div><Label>Máximo de usos (opcional)</Label><Input type="number" min="1" value={form.max_uses || ""} onChange={(e) => setForm({ ...form, max_uses: e.target.value })} className="bg-black/40 border-white/10 mt-1.5" data-testid="coupon-max-uses" /></div>
+          <div className="flex items-center gap-2 mt-4 sm:col-span-2"><Switch checked={form.active} onCheckedChange={(v) => setForm({ ...form, active: v })} data-testid="coupon-active" /><span className="text-sm text-white/70">Cupom ativo</span></div>
+        </div>
+        <div className="mt-5 flex items-center gap-3">
+          <Button onClick={save} className="btn-gold-glow rounded-full h-11 px-6 font-bold" data-testid="coupon-save">
+            <Plus className="w-4 h-4 mr-1" /> {editing ? "Salvar" : "Criar cupom"}
+          </Button>
+          {editing && <Button variant="ghost" onClick={() => { setEditing(null); setForm(empty); }} data-testid="coupon-cancel">Cancelar</Button>}
+        </div>
+        <p className="mt-3 text-xs text-white/40">Clientes digitam esse código no checkout e ganham desconto no total do pedido.</p>
+      </div>
+
+      <div className="surface-card p-5">
+        <div className="font-display font-bold text-lg mb-3">Cupons ({items.length})</div>
+        <div className="divide-y divide-white/5" data-testid="coupons-list">
+          {items.map(c => (
+            <div key={c.id} className="py-3 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-[var(--gold)]/10 border border-[var(--gold)]/30 grid place-items-center"><Ticket className="w-4 h-4 text-[var(--gold-bright)]" /></div>
+              <div className="flex-1 min-w-0">
+                <div className="font-mono font-bold tracking-widest">{c.code}</div>
+                <div className="text-xs text-white/50">
+                  {c.percent_off}% off · usado {c.uses || 0}{c.max_uses ? `/${c.max_uses}` : ""} vez{(c.uses || 0) === 1 ? "" : "es"}
+                  {c.expires_at && ` · expira ${fmtDate(c.expires_at)}`}
+                  {!c.active && <span className="text-red-400"> · inativo</span>}
+                </div>
+              </div>
+              <button onClick={() => { setEditing(c); setForm({ ...c, expires_at: c.expires_at || "" }); }} className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-white/30" data-testid={`coupon-edit-${c.id}`}><Pencil className="w-4 h-4" /></button>
+              <ConfirmDialog
+                title="Excluir cupom?"
+                description={`O cupom "${c.code}" deixará de ser válido.`}
+                confirmLabel="Excluir"
+                testid={`coupon-del-${c.id}`}
+                onConfirm={() => del(c.id)}
+              >
+                <button className="h-9 w-9 grid place-items-center rounded-full border border-white/10 hover:border-red-400/50" data-testid={`coupon-del-${c.id}`}><Trash2 className="w-4 h-4 text-red-400" /></button>
+              </ConfirmDialog>
+            </div>
+          ))}
+          {!items.length && <div className="py-8 text-center text-white/50">Nenhum cupom criado ainda.</div>}
         </div>
       </div>
     </div>
@@ -286,14 +562,6 @@ export default function AdminDashboard() {
 
   const logoutAndGo = () => { logout(); nav("/"); };
 
-  const stats = [
-    { label: "Produtos", value: products.length, icon: Package, testid: "stat-products" },
-    { label: "Ativos", value: products.filter(p => p.active).length, icon: Tag, testid: "stat-active" },
-    { label: "Indisponíveis", value: products.filter(p => !p.active).length, icon: ImageOff, testid: "stat-inactive" },
-    { label: "Promoções", value: promotions.filter(p => p.active).length, icon: Flame, testid: "stat-promos" },
-    { label: "Categorias", value: categories.length, icon: Tag, testid: "stat-categories" },
-  ];
-
   return (
     <div className="min-h-screen">
       <header className="border-b border-white/10 bg-black/60 backdrop-blur-xl sticky top-0 z-30">
@@ -310,32 +578,24 @@ export default function AdminDashboard() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="bg-[var(--surface)] border border-white/10 p-1 rounded-full">
+          <TabsList className="bg-[var(--surface)] border border-white/10 p-1 rounded-full flex flex-wrap h-auto">
             <TabsTrigger value="dashboard" data-testid="tab-dashboard" className="rounded-full data-[state=active]:bg-[var(--gold)] data-[state=active]:text-black">Dashboard</TabsTrigger>
+            <TabsTrigger value="orders" data-testid="tab-orders" className="rounded-full data-[state=active]:bg-[var(--gold)] data-[state=active]:text-black">Pedidos</TabsTrigger>
             <TabsTrigger value="products" data-testid="tab-products" className="rounded-full data-[state=active]:bg-[var(--gold)] data-[state=active]:text-black">Produtos</TabsTrigger>
             <TabsTrigger value="categories" data-testid="tab-categories" className="rounded-full data-[state=active]:bg-[var(--gold)] data-[state=active]:text-black">Categorias</TabsTrigger>
             <TabsTrigger value="promotions" data-testid="tab-promotions" className="rounded-full data-[state=active]:bg-[var(--gold)] data-[state=active]:text-black">Promoções</TabsTrigger>
+            <TabsTrigger value="coupons" data-testid="tab-coupons" className="rounded-full data-[state=active]:bg-[var(--gold)] data-[state=active]:text-black">Cupons</TabsTrigger>
             <TabsTrigger value="config" data-testid="tab-config" className="rounded-full data-[state=active]:bg-[var(--gold)] data-[state=active]:text-black">Configurações</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="dashboard" className="mt-6">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              {stats.map((s) => (
-                <div key={s.label} className="surface-card p-5" data-testid={s.testid}>
-                  <div className="flex items-center gap-2 text-white/50 text-xs uppercase tracking-widest">
-                    <s.icon className="w-4 h-4 text-[var(--gold-bright)]" /> {s.label}
-                  </div>
-                  <div className="mt-3 text-4xl font-display font-black gold-text">{s.value}</div>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="products" className="mt-6"><ProductsManager categories={categories} /></TabsContent>
+          <TabsContent value="dashboard" className="mt-6"><DashboardOverview categories={categories} products={products} promotions={promotions} /></TabsContent>
+          <TabsContent value="orders" className="mt-6"><OrdersManager /></TabsContent>
+          <TabsContent value="products" className="mt-6"><ProductsManager categories={categories} onChange={setProducts} /></TabsContent>
           <TabsContent value="categories" className="mt-6"><CategoriesManager onChange={setCategories} /></TabsContent>
           <TabsContent value="promotions" className="mt-6"><PromotionsManager products={products} /></TabsContent>
+          <TabsContent value="coupons" className="mt-6"><CouponsManager /></TabsContent>
           <TabsContent value="config" className="mt-6"><ConfigManager /></TabsContent>
         </Tabs>
       </main>
