@@ -1,0 +1,59 @@
+{
+  "summary": "Full backend + frontend E2E test of Barão Distribuidora. Backend: 35/35 pytest cases pass (auth/JWT, categories, products, promotions, config, upload+file serve, authz 401s, validation, cascade delete, promo date-window filtering, bcrypt $2b$ hash check). Frontend: home loader→hero→4 category cards→category-filtered product grid→Promoção do Dia, cart add/inc/dec/total, checkout dialog → WhatsApp deep link with correct phone from config, floating WhatsApp, admin login (invalid=error toast, valid→/admin), all 5 tabs, product CRUD incl. real image upload to object storage, active toggle, category create, promotion create, config save + persistence after reload, protected route guard for missing/invalid token, mobile 390px layout (no horizontal overflow, mobile menu works). Found 1 functional cart pricing bug, 1 missing promo-price validation, 1 React setState-during-render warning, plus minor design items. All TEST_ data cleaned up and config restored to defaults.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST/PUT /api/promotions", "issue": "No validation that promo_price is > 0 and < the linked product's price. Creating a promo of R$59.90 for an R$18.00 product is accepted and the storefront renders it as a discount (original price struck through). Also product_id is not validated to exist."},
+      {"endpoint": "DELETE /api/categories/{id}, DELETE /api/products/{id}", "issue": "Returns 200 {ok:true} for non-existent ids (no 404). Deleting a category does not check/repoint products that reference its slug, leaving orphaned products invisible on the storefront."},
+      {"endpoint": "POST /api/auth/login", "issue": "No rate limiting / brute-force lockout — 6+ consecutive wrong passwords all return 401 with no throttle (playbook item 4 not implemented)."},
+      {"endpoint": "auth (design)", "issue": "Playbook items 2 and 3 not applicable/not implemented: token is returned in JSON body and stored in localStorage (no httpOnly cookie), and CORS is allow_origins=['*'] with allow_credentials=False. Matches the requested Bearer-token design, but localStorage tokens are XSS-exposed and origins are unrestricted."},
+      {"endpoint": "GET /api/promotions", "issue": "starts_at/ends_at are compared as raw strings against an ISO 'now'. Works for UTC-normalized values, but the admin sends datetime-local values without timezone/seconds (e.g. '2026-07-01T10:00'), so the string comparison can misjudge windows for non-UTC input."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "AdminLogin.jsx (line 17)", "issue": "navigate() is called during render (`if (user) { nav('/admin'); return null; }`) causing the React console error 'Cannot update a component while rendering a different component'. Use <Navigate to=\"/admin\" replace /> instead.", "selector": "n/a (console error on /admin/login)", "priority": "MEDIUM"},
+      {"component": "AdminDashboard delete actions", "issue": "Product/category/promotion delete uses native window.confirm() instead of the shadcn AlertDialog, breaking the premium dark/gold look and making delete non-testable/dismissable by browsers.", "selector": "[data-testid^=\"prod-del-\"], [data-testid^=\"cat-del-\"], [data-testid^=\"promo-del-\"]", "priority": "LOW"}
+    ],
+    "integration_issues": [
+      {"flow": "Add to cart from Promoção do Dia when the same product is already in the cart", "issue": "CartContext.addItem only increments qty for an existing id and never merges the new price fields. Repro: add 'Whisky R$99' from the products grid, then click promo-add for the same product (promo R$79.90) → cart shows 2 × R$99.00 = R$198.00, promo price ignored. The inverse order keeps the promo price for regular adds (under-charging). Fix: merge price/promo_price on re-add.", "affected_selectors": ["[data-testid^=\"promo-add-\"]", "[data-testid=\"cart-total\"]", "[data-testid^=\"add-to-cart-\"]"]},
+      {"flow": "Promotion pricing display", "issue": "Promo card shows product.price struck-through next to promo_price even when promo_price > price (see backend validation gap), presenting a price increase as an offer; no -% badge in that case.", "affected_selectors": ["[data-testid^=\"promo-card-\"]"]}
+    ],
+    "design_issues": [
+      {"screen": "Admin dashboard tab", "issues": ["Stats row occupies only the top ~200px; the rest of the 1080px viewport is empty — consider recent products/promos summary", "Header actions 'Ver site' / 'Sair' sit at the far right where the sonner toast (top-right) overlaps them for ~2s after every save"]},
+      {"screen": "Mobile menu overlay (390px)", "issues": ["Panel background is partially transparent — page cards bleed through behind the nav links, slightly reducing legibility"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth.py",
+    "/app/backend/tests/test_categories.py",
+    "/app/backend/tests/test_products_promotions.py",
+    "/app/backend/tests/test_config_upload.py",
+    "/app/backend/tests/conftest.py",
+    "/app/backend/tests/seed_frontend_data.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Fix CartContext.addItem to merge updated price/promo_price when the product is already in the cart (promo price currently ignored / or incorrectly retained).",
+    "Validate promotion promo_price (>0 and < product price) and that product_id exists, in both POST/PUT /api/promotions and the admin promo form.",
+    "Replace the render-time navigate() in AdminLogin.jsx with <Navigate replace /> to clear the React setState-during-render error.",
+    "Return 404 on DELETE of non-existent product/category ids; handle products orphaned by category deletion.",
+    "Optional hardening: login rate limiting and restricting CORS allow_origins to the app origin."
+  ],
+  "critical_code_review_comments": [
+    "CartContext.addItem: `if (found) return prev.map(i => i.id===id ? {...i, qty:i.qty+1} : i)` discards the incoming product payload — root cause of the promo pricing bug.",
+    "AdminLogin.jsx:17 performs navigation as a side effect inside the render body.",
+    "server.py list_promotions performs an N+1 product lookup per promotion; fine at current scale but should use $in/aggregate if catalogs grow.",
+    "server.py uses deprecated @app.on_event('startup'/'shutdown'); migrate to lifespan handlers.",
+    "Storage helpers (init_storage/put_object/get_object) use blocking `requests` inside async endpoints, blocking the event loop on upload/download — wrap in run_in_threadpool or use httpx.AsyncClient.",
+    "DELETE endpoints ignore delete_count, so callers cannot distinguish success from a missing resource."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (35/35 pytest)", "frontend": "92% (all flows pass except cart promo re-pricing)"},
+  "seed_data_creation": "Temporarily seeded 3 TEST_ products + promotions + 1 TEST_ category via /app/backend/tests/seed_frontend_data.py and the admin UI (incl. a real image upload). ALL removed afterwards — DB now has 0 products, 0 promotions, the 4 original seeded categories, and config reset to defaults (whatsapp 5566992575143, instagram @barao_distribuidoraspc). Re-run `python3 /app/backend/tests/seed_frontend_data.py` to repopulate demo data for UI checks.",
+  "should_call_test_agent_after_fix": true,
+  "should_main_agent_self_test": false,
+  "test_credentials": "/app/memory/test_credentials.md present and valid — luizcarlos221fg@gmail.com / barao123 works on POST /api/auth/login and /admin/login",
+  "context_for_next_testing_agent": "Backend pytest suite lives in /app/backend/tests (pytest.ini fixed at -n 2 --dist loadscope; run `cd /app/backend && python -m pytest tests/ -v`) and was 35/35 green. Storefront starts with an empty catalog; use tests/seed_frontend_data.py to seed, and delete TEST_ items + reset config afterwards. Correct admin upload file input testid is `prod-img-file` / `cat-img-file` / `promo-img-file` (not prod-image-file). Delete buttons trigger native window.confirm, which Playwright auto-dismisses — register `page.on('dialog', lambda d: d.accept())` to test deletes from the UI. Loader delays home render by ~1.9s, so wait ~3.5s after navigation. Unsplash images on the homepage report naturalWidth=0 only because they are below the fold (verified HTTP 200) — not a bug.",
+  "rca_of_the_issue": "Cart promo bug: CartContext.addItem matches by product id and, when found, returns {...existingItem, qty+1}, dropping the freshly passed promo_price/price. PromoDoDia passes {...product, promo_price: promo.promo_price}, so its price never reaches an item already added from the products grid (charges full price), and conversely a promo-added item keeps the promo price for later regular adds (undercharges). Fix: `{...i, ...product, qty: i.qty + 1}` or explicitly refresh price/promo_price. React warning RCA: AdminLogin calls useNavigate()'s nav() synchronously in the component body during render."
+}

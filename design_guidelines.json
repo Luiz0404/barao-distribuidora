@@ -1,0 +1,104 @@
+{
+  "project_name": "Barão Distribuidora & Tabacaria",
+  "theme": "Dark Mode Elegant (Premium, Urban, Jovem, Fast)",
+  "typography": {
+    "headings": {
+      "font": "Outfit",
+      "fallback": "sans-serif",
+      "style": "tracking-tight, font-bold, impactful, gold and white variations",
+      "scale": "text-4xl sm:text-5xl lg:text-6xl max"
+    },
+    "body": {
+      "font": "Manrope",
+      "fallback": "sans-serif",
+      "style": "clean, readable, relaxed line height",
+      "scale": "text-base for normal, text-sm for labels"
+    }
+  },
+  "colors": {
+    "primary": "#D4AF37",
+    "secondary": "#FF4500",
+    "background": "#0A0A0A",
+    "surface": "#1A1A1A",
+    "surface_hover": "#262626",
+    "text_main": "#FFFFFF",
+    "text_muted": "#A3A3A3",
+    "notes": "No pure black/gray, slight warm tint. Gold/Yellow represents the Barão identity/crown. Red/Orange for hookah/fire details."
+  },
+  "visual_enhancers": {
+    "surfaces": "Glassmorphism for header (backdrop-blur-xl bg-black/60) with subtle gold/gray borders (border-white/10 or border-[#D4AF37]/20). Solid surfaces for product cards with soft shadows and crisp borders.",
+    "hover_effects": "Translate-y-1, glow effect on borders (gold/red), image zoom in on hover for product cards.",
+    "animations": "Subtle smoke effect (CSS particles, soft layered box-shadows, or Framer motion) in Tabacaria section, pulse animation on floating WhatsApp button. Loading crown animation on start.",
+    "icons": "lucide-react for sharp, premium duotone/regular icons (default)."
+  },
+  "layouts": {
+    "hero": "Impactful full-height or 80vh hero. Dark overlay over background image (bg-black/50 to bg-black/70), gold typography, multiple CTAs (WhatsApp primary).",
+    "categories": "Grid layout. Bento-style for combinations. grid-cols-2 md:grid-cols-4 for categories (Bebidas, Tabacaria, Combos, Gelo).",
+    "catalog": "Grid layout with sidebar or top bar filters. Product cards must be highly usable on mobile (Mobile First layout: 1 col on mobile, 3-4 on desktop).",
+    "admin_panel": "Strict, dense grid hierarchy. Sidebar navigation. High contrast for readability. No glassmorphism, use solid dark surfaces for admin."
+  },
+  "components": {
+    "header": "Sticky with glassmorphism. Logo with crown left, nav links center, WhatsApp CTA right. Nav links visible on desktop.",
+    "product_card": "Dark surface (#1A1A1A), subtle border. Image top, Title, Price (gold text), CTA 'Adicionar' or 'Comprar via WhatsApp' button.",
+    "cart_modal": "Slide-in from right. High density, clear checkout CTA routing to WhatsApp.",
+    "floating_whatsapp": "Fixed bottom-right, z-50, continuous pulse animation, brand green or brand gold.",
+    "carousel": "Use embla-carousel-react for 'Combos' and 'Promoção do Dia'. Large, eye-catching cards."
+  },
+  "accessibility": {
+    "contrast": "Ensure all text against dark surfaces meets minimum 4.5:1 ratio. Muted text must still be legible.",
+    "focus": "Focus states must have a gold ring (focus:ring-2 focus:ring-[#D4AF37] focus:outline-none).",
+    "testing": "All interactive elements MUST include a `data-testid` attribute (e.g., data-testid='add-to-cart-btn')."
+  },
+  "image_urls": {
+    "bebidas": {
+      "url": "https://images.unsplash.com/photo-1766589221103-2fc159a1d270?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwyfHxiZWVyJTIwZGFyayUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzg3OTQyODI1fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Hand holding pint of beer, dark background (Use for Bebidas category)"
+    },
+    "tabacaria": {
+      "url": "https://images.unsplash.com/photo-1662468527222-e4edb1cda938?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwxfHxob29rYWglMjBkYXJrfGVufDB8fHx8MTc4Nzk0MjgyNXww&ixlib=rb-4.1.0&q=85",
+      "description": "Hookah vases with dark background (Use for Tabacaria section/category)"
+    },
+    "combos": {
+      "url": "https://images.unsplash.com/photo-1693409166438-fc92119a0060?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2Mzl8MHwxfHNlYXJjaHwzfHxjb2NrdGFpbCUyMGRyaW5rcyUyMGRhcmt8ZW58MHx8fHwxNzg3OTQyODI1fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Cocktails in dark setting (Use for Combos/Party drinks)"
+    },
+    "gelo_carvao": {
+      "url": "https://images.unsplash.com/photo-1590430752967-d0e116909be1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHxpY2UlMjBjdWJlcyUyMGJsYWNrJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3ODc5NDI4MjV8MA&ixlib=rb-4.1.0&q=85",
+      "description": "Ice cubes on dark background (Use for Gelo/Carvão category)"
+    },
+    "hero_bg": {
+      "url": "https://images.unsplash.com/photo-1627697586788-478c362e1ce0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwxfHxiZWVyJTIwZGFyayUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzg3OTQyODI1fDA&ixlib=rb-4.1.0&q=85",
+      "description": "Orange light on dark room, great for a moody hero background with gold/orange accents"
+    }
+  },
+  "libraries": [
+    "framer-motion",
+    "lucide-react",
+    "embla-carousel-react",
+    "sonner"
+  ],
+  "instructions_to_main_agent": [
+    "Use .js/.jsx extensions for all React components, as the project uses JS, not TS.",
+    "Design mobile-first with high interactivity. Do not compromise loading speed with overly heavy 3D elements, use Framer Motion for sleek transitions and micro-interactions.",
+    "Implement a loading screen featuring a crown logo/icon before the main site loads.",
+    "The Hero section must have a strong Call to Action (CTA) pointing to WhatsApp: '(66) 99257-5143'.",
+    "For the Tabacaria section, incorporate subtle smoke-like background effects or gradients using CSS/Framer Motion.",
+    "Checkout must occur via WhatsApp. The cart should collect the user's name, observations, and products, generating a formatted WhatsApp message.",
+    "Provide a full Admin Dashboard for CRUD operations (products, categories, promotions).",
+    "Ensure 'data-testid' is present on every interactive element (buttons, links, inputs).",
+    "NEVER use fully transparent backgrounds for the header when it overlaps with content. Use backdrop-blur-xl and a semi-transparent dark background like bg-black/60.",
+    "Do NOT use HTML `<select>` or `<input type='date'>`. Use Radix/Shadcn UI components."
+  ],
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "Avoid the 'AI slop' aesthetic. Do not use generic centered layouts or simplistic gradients.",
+    "Use glassmorphism effects with backdrop filters (12-24px blur).",
+    "Never apply universal transitions (e.g., transition: all). Target specific properties like opacity and transform.",
+    "Do not center-align the app container (.App { text-align: center; }).",
+    "Always use modern button styles (pill-shaped or sharp) with interaction animations.",
+    "Do not use AI emoji characters for icons.",
+    "Include micro-animations (hover states, transitions, entrance animations).",
+    "Use generous spacing (2-3x more than standard).",
+    "Use sonner for toast notifications.",
+    "Prioritize using pre-existing components from src/components/ui when applicable."
+  ]
+}
