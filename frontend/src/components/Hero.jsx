@@ -4,7 +4,7 @@ import { Flame, MapPin, Rocket, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const HERO_BG = "https://images.unsplash.com/photo-1627697586788-478c362e1ce0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA3MDB8MHwxfHNlYXJjaHwxfHxiZWVyJTIwZGFyayUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzg3OTQyODI1fDA&ixlib=rb-4.1.0&q=85";
-const LOGO_URL = "https://customer-assets.emergentagent.com/job_ca739aa8-dfcd-406e-91f2-dc503108b671/artifacts/3voyxeg3_WhatsApp%20Image%202026-08-28%20at%2014.38.00.jpeg";
+const LOGO_URL = "/logo.jpg";
 
 export default function Hero({ whatsapp }) {
   const waLink = `https://wa.me/${whatsapp || "5566992575143"}?text=${encodeURIComponent("Olá, Barão Distribuidora! Quero fazer um pedido.")}`;

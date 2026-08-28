@@ -9,7 +9,7 @@ import uuid
 import logging
 import bcrypt
 import jwt
-import requests
+import mimetypes
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 
@@ -29,10 +29,9 @@ JWT_SECRET = os.environ["JWT_SECRET"]
 JWT_ALGORITHM = "HS256"
 ADMIN_EMAIL = os.environ["ADMIN_EMAIL"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
-EMERGENT_LLM_KEY = os.environ.get("EMERGENT_LLM_KEY", "")
 
-STORAGE_BASE = (os.environ.get("INTEGRATION_PROXY_URL") or "").strip() or "https://integrations.emergentagent.com"
-STORAGE_URL = STORAGE_BASE.rstrip("/") + "/objstore/api/v1/storage"
+UPLOAD_DIR = ROOT_DIR / "uploads"
+UPLOAD_DIR.mkdir(exist_ok=True)
 APP_NAME = "barao-distribuidora"
 
 client = AsyncIOMotorClient(MONGO_URL)
@@ -43,8 +42,6 @@ api = APIRouter(prefix="/api")
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("barao")
-
-storage_key = None
 
 
 # =========================
@@ -91,44 +88,21 @@ async def get_current_admin(authorization: Optional[str] = Header(None)) -> dict
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
-def init_storage(force: bool = False):
-    global storage_key
-    if storage_key and not force:
-        return storage_key
-    resp = requests.post(f"{STORAGE_URL}/init", json={"emergent_key": EMERGENT_LLM_KEY}, timeout=30)
-    resp.raise_for_status()
-    storage_key = resp.json()["storage_key"]
-    return storage_key
-
-
 def put_object(path: str, data: bytes, content_type: str) -> dict:
-    key = init_storage()
-    resp = requests.put(
-        f"{STORAGE_URL}/objects/{path}",
-        headers={"X-Storage-Key": key, "Content-Type": content_type},
-        data=data,
-        timeout=120,
-    )
-    if resp.status_code == 404:
-        key = init_storage(force=True)
-        resp = requests.put(
-            f"{STORAGE_URL}/objects/{path}",
-            headers={"X-Storage-Key": key, "Content-Type": content_type},
-            data=data,
-            timeout=120,
-        )
-    resp.raise_for_status()
-    return resp.json()
+    """Save uploaded file to local disk under UPLOAD_DIR. Portable to any host with a writable filesystem."""
+    dest = UPLOAD_DIR / path
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_bytes(data)
+    return {"path": path, "size": len(data), "content_type": content_type}
 
 
 def get_object(path: str):
-    key = init_storage()
-    resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
-    if resp.status_code == 404:
-        key = init_storage(force=True)
-        resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": key}, timeout=60)
-    resp.raise_for_status()
-    return resp.content, resp.headers.get("Content-Type", "application/octet-stream")
+    """Read a stored file from local disk. Returns (bytes, content_type)."""
+    src = UPLOAD_DIR / path
+    if not src.exists() or not src.is_file():
+        raise FileNotFoundError(path)
+    guessed, _ = mimetypes.guess_type(src.name)
+    return src.read_bytes(), (guessed or "application/octet-stream")
 
 
 # =========================
@@ -566,7 +540,7 @@ async def upload(file: UploadFile = File(...), current=Depends(get_current_admin
 async def download(path: str):
     try:
         data, ctype = get_object(path)
-    except requests.HTTPError as e:
+    except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Arquivo não encontrado")
     return FastAPIResponse(content=data, media_type=ctype)
 
@@ -625,12 +599,7 @@ async def on_startup():
     if not await db.config.find_one({"id": "main"}):
         await db.config.insert_one({"id": "main", **DEFAULT_CONFIG})
 
-    # Init storage
-    try:
-        init_storage()
-        logger.info("Object storage initialized")
-    except Exception as e:
-        logger.warning(f"Storage init failed (uploads will retry lazily): {e}")
+    logger.info(f"Uploads directory: {UPLOAD_DIR}")
 
 
 @app.on_event("shutdown")

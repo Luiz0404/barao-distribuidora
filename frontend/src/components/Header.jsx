@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { useCart } from "@/context/CartContext";
 
-const LOGO_URL = "https://customer-assets.emergentagent.com/job_ca739aa8-dfcd-406e-91f2-dc503108b671/artifacts/3voyxeg3_WhatsApp%20Image%202026-08-28%20at%2014.38.00.jpeg";
+const LOGO_URL = "/logo.jpg";
 
 const NAV = [
   { id: "hero", label: "Início" },
